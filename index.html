@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ar" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#64672c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="الذاكر">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>الذاكر</title>
+<style>
+:root{--u:min(1vw,.5625vh);--bg:#64672c;--fg:#fdfdfd}
+:root[data-inv="1"]{--bg:#fdfdfd;--fg:#64672c}
+html,body{height:100%;margin:0;background:var(--bg);overflow:hidden;transition:background .5s}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;touch-action:manipulation}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.app{position:fixed;top:0;bottom:0;left:50%;width:calc(var(--u)*100);margin-left:calc(var(--u)*-50);color:var(--fg);transition:color .5s}
+.clock{position:absolute;left:7%;top:calc(4.5% + env(safe-area-inset-top,0px));font-family:"DIN Alternate","Bahnschrift","Roboto Condensed","Arial Narrow",system-ui,sans-serif;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.2;pointer-events:none}
+.clock span{display:block;font-size:calc(var(--u)*10)}
+.timer{position:absolute;left:0;right:0;top:calc(44.3% - var(--u)*36);text-align:center;font-family:"DIN Alternate","Bahnschrift","Roboto Condensed","Arial Narrow",system-ui,sans-serif;font-weight:600;font-size:calc(var(--u)*5.5);font-variant-numeric:tabular-nums;opacity:.9;pointer-events:none}
+.reset{position:absolute;right:4%;top:calc(4% + env(safe-area-inset-top,0px));width:calc(var(--u)*16);height:calc(var(--u)*16);background:none;border:0;outline:0;padding:0;color:var(--fg);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:color .5s}
+.reset svg{width:calc(var(--u)*11);height:calc(var(--u)*11);fill:currentColor}
+.circle{position:absolute;left:50%;top:44.3%;width:calc(var(--u)*52);height:calc(var(--u)*52);margin:calc(var(--u)*-26) 0 0 calc(var(--u)*-26);border-radius:50%;background:var(--fg);color:var(--bg);display:flex;align-items:center;justify-content:center;font-weight:600;font-variant-numeric:tabular-nums;pointer-events:none;transition:background .5s,color .5s}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="clock"><span id="hh">00</span><span id="mm">00</span><span class="s" id="ss">00</span></div>
+  <button class="reset" id="reset" type="button" aria-label="إعادة"><svg viewBox="0 0 24 24"><path d="M18.4 10.6C16.55 8.99 14.15 8 11.5 8c-4.65 0-8.58 3.03-9.96 7.22L3.9 16c1.05-3.19 4.05-5.5 7.6-5.5 1.95 0 3.73.72 5.12 1.88L13 16h9V7l-3.6 3.6z"/></svg></button>
+  <div class="timer" id="timer">00:00:00</div>
+  <div class="circle" id="circle"><span id="num">0</span></div>
+</div>
+<script>
+var count=0;
+function $(id){return document.getElementById(id)}
+try{var s=parseInt(localStorage.getItem('alzakir-v1'),10);if(s>=0)count=s}catch(e){}
+function render(){
+  var t=$('num'),len=String(count).length,inv=Math.floor(count/100)%2===1;
+  t.textContent=count;
+  t.style.fontSize='calc(var(--u)*'+(len>=6?9:len>=5?11:14)+')';
+  document.documentElement.setAttribute('data-inv',inv?1:0);
+  var m=document.querySelector('meta[name=theme-color]');if(m)m.content=inv?'#fdfdfd':'#64672c';
+}
+var acc=0,runStart=null,lastTap=0;
+try{var t0=parseInt(localStorage.getItem('alzakir-t1'),10);if(t0>0)acc=t0}catch(e){}
+function elapsed(now){return acc+(runStart!==null?now-runStart:0)}
+function fmt(ms){var t=Math.floor(ms/1000),p=function(x){return String(x).padStart(2,'0')};return p(Math.floor(t/3600))+':'+p(Math.floor(t%3600/60))+':'+p(t%60)}
+function saveT(){try{localStorage.setItem('alzakir-t1',String(Math.floor(elapsed(Date.now()))))}catch(e){}}
+function tickT(){
+  var now=Date.now();
+  if(runStart!==null&&now-lastTap>=10000){acc+=lastTap+10000-runStart;runStart=null;saveT()}
+  $('timer').textContent=fmt(elapsed(now));
+}
+var ctx=null;
+function unlock(){try{ctx=ctx||new (window.AudioContext||window.webkitAudioContext)();if(ctx.state==='suspended')ctx.resume()}catch(e){}}
+function beep(){
+  try{
+    unlock();
+    [880,1175].forEach(function(f,k){
+      var o=ctx.createOscillator(),g=ctx.createGain(),t=ctx.currentTime+k*.16;
+      o.type='sine';o.frequency.value=f;
+      g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(0.1,t+.02);g.gain.exponentialRampToValueAtTime(0.0001,t+.28);
+      o.connect(g);g.connect(ctx.destination);o.start(t);o.stop(t+.3);
+    });
+  }catch(e){}
+}
+function save(){try{localStorage.setItem('alzakir-v1',String(count))}catch(e){}}
+document.addEventListener('pointerdown',function(e){
+  if(e.target.closest&&e.target.closest('#reset'))return;
+  e.preventDefault();
+  unlock();
+  count++;render();save();
+  var now=Date.now();if(runStart===null)runStart=now;lastTap=now;saveT();tickT();
+  if(count%100===0){beep();try{navigator.vibrate&&navigator.vibrate([80,60,80])}catch(err){}}
+  try{$('circle').animate([{transform:'scale(.95)'},{transform:'scale(1)'}],{duration:110})}catch(err){}
+});
+$('reset').addEventListener('click',function(){count=0;acc=0;runStart=null;render();save();saveT();tickT()});
+function clock(){
+  var d=new Date(),p=function(x){return String(x).padStart(2,'0')};
+  $('hh').textContent=p(d.getHours());$('mm').textContent=p(d.getMinutes());$('ss').textContent=p(d.getSeconds());
+}
+clock();setInterval(clock,1000);render();tickT();setInterval(tickT,250);
+if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){})})}
+</script>
+</body>
+</html>
